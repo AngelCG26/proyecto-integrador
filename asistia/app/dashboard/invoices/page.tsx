@@ -6,11 +6,11 @@ import autoTable from "jspdf-autotable";
 const grupos = ["1A", "1B", "1C", "2A", "2B", "2C", "3A", "3B"];
 
 const alumnosSimulados = [
-  "Pedro López",
-  "Ana Martínez",
-  "José Hernández",
-  "María Pérez",
-  "Luis González",
+  "Carlos Pérez",
+  "Lucia Gómez",
+  "Diego Martínez",
+  "Angel Ramirez",
+  "Ana López",
   "Paola Torres",
   "Sofía Ramírez",
   "Carlos Ortega",
