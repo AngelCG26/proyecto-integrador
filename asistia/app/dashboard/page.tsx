@@ -1,69 +1,103 @@
 "use client";
-import React, { useEffect, useState } from 'react';
-import axios from 'axios';
-import { Bar } from 'react-chartjs-2'; // npm i react-chartjs-2 chart.js
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
 
-type DashboardData = {
-  presentCount: number;
-  absentCount: number;
-  lateCount: number;
-  recentAlerts: number;
-};
+const data = [
+  { name: "1A", asistencia: 92 },
+  { name: "1B", asistencia: 88 },
+  { name: "1C", asistencia: 79 },
+  { name: "2A", asistencia: 94 },
+  { name: "2B", asistencia: 83 },
+  { name: "2C", asistencia: 81 },
+  { name: "3A", asistencia: 91 },
+  { name: "3B", asistencia: 76 },
+  { name: "3C", asistencia: 85 },
+  { name: "4A", asistencia: 89 },
+  { name: "4B", asistencia: 74 },
+];
 
-export default function Dashboard() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    axios.get('http://localhost:4000/api/dashboard')
-      .then(res => setData(res.data))
-      .catch(() => alert('Error cargando dashboard'))
-      .finally(() => setLoading(false));
-  }, []);
-
-  if (loading) return <p className="p-6">Cargando datos...</p>;
-  if (!data) return <p className="p-6">No hay datos</p>;
-
-  const chartData = {
-    labels: ['Presentes', 'Ausentes', 'Tarde'],
-    datasets: [
-      {
-        label: 'Alumnos',
-        data: [data.presentCount, data.absentCount, data.lateCount],
-        backgroundColor: ['#2563EB', '#3B82F6', '#60A5FA'],
-      },
-    ],
-  };
-
+export default function Home() {
   return (
-    <div className="p-6">
-      <h1 className="text-3xl font-bold mb-8 text-blue-900">Dashboard</h1>
+    <div className="p-6 bg-white min-h-screen">
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-6 mb-12">
-        <div className="bg-blue-600 rounded-lg shadow-lg p-6 text-white flex flex-col justify-center">
-          <p className="text-lg font-semibold">Alumnos Presentes</p>
-          <p className="text-4xl font-bold mt-2">{data.presentCount}</p>
+      {/* Título */}
+      <h1 className="text-2xl font-bold text-purple-700 mb-6">
+        Panel de Asistencia
+      </h1>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        {/* 📊 Panel de la gráfica */}
+        <div className="col-span-2 bg-white border border-purple-200 rounded-2xl shadow-md p-6 hover:shadow-lg transition">
+
+          <h2 className="text-xl font-semibold text-purple-700 mb-4">
+            Asistencia promedio por grupo
+          </h2>
+
+          {/* Contenedor con scroll para muchos grupos */}
+          <div className="h-72 overflow-x-auto">
+            <div className="min-w-[800px] h-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={data}>
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar
+                    dataKey="asistencia"
+                    radius={[10, 10, 0, 0]}
+                    fill="#7C3AED" // morado
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         </div>
-        <div className="bg-blue-400 rounded-lg shadow-lg p-6 text-white flex flex-col justify-center">
-          <p className="text-lg font-semibold">Alumnos Ausentes</p>
-          <p className="text-4xl font-bold mt-2">{data.absentCount}</p>
-        </div>
-        <div className="bg-blue-500 rounded-lg shadow-lg p-6 text-white flex flex-col justify-center">
-          <p className="text-lg font-semibold">Llegadas Tarde</p>
-          <p className="text-4xl font-bold mt-2">{data.lateCount}</p>
-        </div>
-        <div className="bg-blue-700 rounded-lg shadow-lg p-6 text-white flex flex-col justify-center">
-          <p className="text-lg font-semibold">Alertas Recientes</p>
-          <p className="text-4xl font-bold mt-2">{data.recentAlerts}</p>
+
+        {/* 📌 Panel derecho (tarjetas) */}
+        <div className="flex flex-col gap-4">
+
+          {/* Tarjeta 1 */}
+          <div className="bg-white border border-purple-200 rounded-2xl shadow-md p-4">
+            <p className="text-sm text-gray-500">Promedio general</p>
+            <p className="text-4xl font-bold text-purple-700">89%</p>
+            <p className="text-xs text-blue-500 mt-1">+2% este mes</p>
+          </div>
+
+          {/* Tarjeta 2 */}
+          <div className="bg-white border border-red-200 rounded-2xl shadow-md p-4">
+            <p className="text-sm text-gray-500">Alertas</p>
+            <p className="text-lg font-semibold text-red-500">
+              3 grupos con asistencia baja
+            </p>
+          </div>
+
+          {/* Tarjeta 3 */}
+          <div className="bg-white border border-blue-200 rounded-2xl shadow-md p-4">
+            <p className="text-sm text-gray-500">Mejor grupo</p>
+            <p className="text-lg font-semibold text-blue-600">
+              2A – 94%
+            </p>
+          </div>
+
+          {/* Tarjeta 4 - opcional */}
+          <div className="bg-white border border-gray-200 rounded-2xl shadow-md p-4">
+            <p className="text-sm text-gray-500 mb-1">Últimos registros</p>
+
+            <ul className="text-xs text-gray-600 space-y-1">
+              <li>08:02 AM – 1B marcó asistencia</li>
+              <li>08:05 AM – 1A marcó asistencia</li>
+              <li>08:11 AM – 2C marcó asistencia</li>
+            </ul>
+          </div>
+
         </div>
       </div>
-
-      <section>
-        <h2 className="text-2xl font-semibold mb-4 text-blue-800">Resumen de asistencia (última semana)</h2>
-        <div className="w-full max-w-3xl h-64 bg-blue-50 rounded-lg flex items-center justify-center">
-          <Bar data={chartData} />
-        </div>
-      </section>
     </div>
   );
 }

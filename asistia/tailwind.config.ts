@@ -13,20 +13,38 @@ const config: Config = {
       },
       colors: {
         blue: {
-          400: '#2589FE',
-          500: '#0070F3',
-          600: '#2F6FEB',
+          50:  "#F4F0FF",
+          100: "#E6DEFF",
+          200: "#D0C2FF",
+          300: "#B8A6FF",
+          400: "#A088FF",
+          500: "#7C4DFF",
+          600: "#6A3FE0",
+          700: "#5A34C4",
+          800: "#482A9E",
+          900: "#2F1B66",
+        },
+
+        // ✔️ Tus colores personalizados (DENTRO de extend.colors)
+        beige: {
+          DEFAULT: "#FFF8EE",
+        },
+        yellow: {
+          soft: "#FFEB99",
+        },
+        grayneutral: {
+          DEFAULT: "#6F6F6F",
         },
       },
-    },
-    keyframes: {
-      shimmer: {
-        '100%': {
-          transform: 'translateX(100%)',
+
+      keyframes: {
+        shimmer: {
+          '100%': { transform: 'translateX(100%)' },
         },
       },
     },
   },
   plugins: [require('@tailwindcss/forms')],
 };
+
 export default config;
