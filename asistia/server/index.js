@@ -1,28 +1,28 @@
-const express = require('express');
-const nodemailer = require('nodemailer');
-const cors = require('cors');
-const sql = require('mssql');
+const express = require("express");
+const cors = require("cors");
+const sql = require("mssql");
+const nodemailer = require("nodemailer");
 
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// Configura transporter de nodemailer
+// ========== CONFIG EMAIL ==========
 const transporter = nodemailer.createTransport({
-  service: 'gmail',
+  service: "gmail",
   auth: {
-    user: 'infasistia@gmail.com',
-    pass: 'mzvy amfh nbwc senn', // contraseña de app
+    user: "infasistia@gmail.com",
+    pass: "mzvy amfh nbwc senn",
   },
 });
 
-// Configuración conexión SQL Server
-const config = {
-  user: 'sa',
-  password: 'TestSqlServer',
-  server: 'ANGELCG260',
+// ========== CONFIG SQL SERVER ==========
+const dbConfig = {
+  user: "sa",
+  password: "TestSqlServer",
+  server: "ANGELCG260",
+  database: "EscuelaXBD",
   port: 1433,
-  database: 'EscuelaXBD',
   options: {
     encrypt: false,
     trustServerCertificate: true,
@@ -30,85 +30,137 @@ const config = {
 };
 
 let pool;
-
-async function connectToDb() {
+async function connectDB() {
   try {
-    console.log('Configuración de conexión SQL:', config);
-    pool = await sql.connect(config);
-    console.log('Conectado a SQL Server');
-  } catch (error) {
-    console.error('Error conectando a la base de datos:', error);
+    pool = await sql.connect(dbConfig);
+    console.log("SQL Server conectado.");
+  } catch (err) {
+    console.error("Error al conectar a SQL:", err);
   }
 }
-connectToDb();
+connectDB();
 
-app.post('/llegada', async (req, res) => {
-  if (!pool) return res.status(500).json({ error: 'Base de datos no conectada' });
+// ========================
+//  🔵 ENDPOINT: LLEGADA RFID
+// ========================
+app.post("/llegada", async (req, res) => {
+  console.log("📩 /llegada llamado");
+  console.log("Cuerpo recibido:", req.body);
 
-  const { alumnoId } = req.body;
+  if (!pool) return res.status(500).json({ error: "DB no conectada." });
 
-  console.log('Datos recibidos en /llegada:', { alumnoId });
+  const { tarjetaUID, alumnoId } = req.body;
+
+  if (!tarjetaUID && !alumnoId) {
+    return res.status(400).json({ error: "Falta tarjetaUID o alumnoId." });
+  }
 
   try {
-    const result = await pool.request()
-  .input('alumnoId', sql.Int, alumnoId)
-  .query(`
-    SELECT l.status, a.name, a.papaEmail
-    FROM Llegadas l
-    JOIN Alumnos a ON a.id = l.alumnoId
-    WHERE l.alumnoId = @alumnoId
-    ORDER BY l.HoraLlegada DESC
-  `);
+    let alumno;
 
-    if (result.recordset.length === 0) {
-      return res.status(404).json({ error: 'Alumno no encontrado' });
+    // Buscar alumno por UID
+    if (tarjetaUID) {
+      const alumnoQuery = await pool
+        .request()
+        .input("uid", sql.VarChar, tarjetaUID)
+        .query("SELECT id, name, papaEmail FROM Alumnos WHERE tarjetaUID = @uid");
+
+      if (alumnoQuery.recordset.length === 0) {
+        return res.status(404).json({ error: "Tarjeta no registrada." });
+      }
+
+      alumno = alumnoQuery.recordset[0];
     }
 
-    const alumno = result.recordset[0];
+    // Buscar alumno por ID
+    if (!alumno && alumnoId) {
+      const alumnoQuery = await pool
+        .request()
+        .input("id", sql.Int, alumnoId)
+        .query("SELECT id, name, papaEmail FROM Alumnos WHERE id = @id");
 
-    const horaLlegada = new Date().toLocaleTimeString('es-MX', {
-      hour: '2-digit',
-      minute: '2-digit',
+      if (alumnoQuery.recordset.length === 0) {
+        return res.status(404).json({ error: "Alumno no encontrado." });
+      }
+
+      alumno = alumnoQuery.recordset[0];
+    }
+
+    // Hora actual
+    const ahora = new Date();
+    const hora = ahora.toTimeString().split(" ")[0]; // HH:MM:SS
+
+    // Determinar status
+    const HORA_LIMITE = "08:00:00";
+    const status = hora <= HORA_LIMITE ? "PRESENT" : "LATE";
+
+    // Actualizar el registro EXISTENTE del alumno (sin crear nuevos)
+    const updateQuery = `
+      UPDATE Llegadas
+      SET status = @status, HoraLlegada = @hora
+      WHERE alumnoId = @alumnoId
+    `;
+
+    const result = await pool
+      .request()
+      .input("alumnoId", sql.Int, alumno.id)
+      .input("status", sql.VarChar, status)
+      .input("hora", sql.VarChar, hora)
+      .query(updateQuery);
+
+    if (result.rowsAffected[0] === 0) {
+      return res.status(404).json({ error: "No existe registro para este alumno." });
+    }
+
+    // Preparar mensaje de correo según status
+    const horaLlegada = new Date().toLocaleTimeString("es-MX", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
 
-    // Tomamos el status directamente de la base de datos
-    const statusUpper = String(alumno.status || '').trim().toUpperCase();
-    console.log('Estado procesado para switch:', statusUpper);
-
-    let mensajeTexto = '';
+    const statusUpper = String(status).trim().toUpperCase();
+    let mensajeTexto = "";
 
     switch (statusUpper) {
-      case 'PRESENT':
+      case "PRESENT":
         mensajeTexto = `Hola, su hijo ${alumno.name} llegó a la escuela a las ${horaLlegada}.`;
         break;
-      case 'LATE':
+      case "LATE":
         mensajeTexto = `Hola, su hijo ${alumno.name} llegó tarde a la escuela a las ${horaLlegada}.`;
         break;
-      case 'ABSENT':
+      case "ABSENT":
         mensajeTexto = `Hola, su hijo ${alumno.name} faltó a clases el día de hoy.`;
         break;
       default:
-        console.log('Status no reconocido, enviando mensaje default');
         mensajeTexto = `Hola, hay una actualización sobre la asistencia de su hijo ${alumno.name}.`;
     }
 
-    console.log('Mensaje que se enviará:', mensajeTexto);
+    console.log("Mensaje que se enviará:", mensajeTexto);
 
-    const mailOptions = {
+    await transporter.sendMail({
       from: '"InfaSistia" <infasistia@gmail.com>',
       to: alumno.papaEmail,
       subject: `Notificación: estado de asistencia de ${alumno.name}`,
       text: mensajeTexto,
-    };
+    });
 
-    await transporter.sendMail(mailOptions);
-    res.json({ mensaje: 'Estado de asistencia registrado y email enviado.' });
-  } catch (error) {
-    console.error('Error en /llegada:', error);
-    res.status(500).json({ error: 'Error al registrar llegada o enviar email' });
+    res.json({
+      mensaje: "Registro actualizado y correo enviado",
+      alumno: alumno.name,
+      status,
+      hora,
+      mensajeTexto,
+    });
+  } catch (err) {
+    console.error("❌ ERROR EN /llegada:", err);
+    res.status(500).json({ error: "Error al procesar llegada o enviar correo." });
   }
 });
 
+
+// ========================
+//  🔵 ENDPOINT: SALIDA
+// ========================
 // Registrar salida
 app.post('/salida', async (req, res) => {
   if (!pool) return res.status(500).json({ error: 'DB no conectada' });
@@ -145,38 +197,40 @@ app.post('/salida', async (req, res) => {
   }
 });
 
-// Ruta para dashboard con datos reales de la BD
-app.get('/dashboard', async (req, res) => {
-  if (!pool) return res.status(500).json({ error: 'Base de datos no conectada' });
+// ========================
+//  🔵 DASHBOARD
+// ========================
+app.get("/dashboard", async (req, res) => {
+  if (!pool) return res.status(500).json({ error: "DB no conectada" });
 
   try {
-    const totalAlumnosResult = await pool.request().query('SELECT COUNT(*) AS total FROM Alumnos');
-    const totalAlumnos = totalAlumnosResult.recordset[0].total;
+    const totalAlumnosResult = await pool.request().query(`
+      SELECT COUNT(*) AS total FROM Alumnos
+    `);
 
-    const asistenciasHoyResult = await pool.request()
-      .query('SELECT COUNT(*) AS presentes FROM Llegadas WHERE CAST(HoraLlegada AS DATE) = CAST(GETDATE() AS DATE)');
-    const asistenciasHoy = asistenciasHoyResult.recordset[0].presentes;
-
-    const faltasHoy = totalAlumnos - asistenciasHoy;
-
-    // Valores de ejemplo para llegadas tarde y alertas, ajusta luego con consultas reales
-    const llegadasTarde = 3;
-    const alertasRecientes = 2;
+    const llegadasHoyResult = await pool.request().query(`
+      SELECT COUNT(*) AS total
+      FROM Llegadas
+      WHERE CAST(HoraLlegada AS DATE) = CAST(GETDATE() AS DATE)
+    `);
 
     res.json({
-      totalAlumnos,
-      asistenciasHoy,
-      faltasHoy,
-      llegadasTarde,
-      alertasRecientes,
+      totalAlumnos: totalAlumnosResult.recordset[0].total,
+      asistenciasHoy: llegadasHoyResult.recordset[0].total,
+      faltasHoy:
+        totalAlumnosResult.recordset[0].total -
+        llegadasHoyResult.recordset[0].total,
     });
   } catch (error) {
-    console.error('Error en /dashboard:', error);
-    res.status(500).json({ error: 'Error al obtener datos del dashboard' });
+    console.error("Error en /dashboard:", error);
+    res.status(500).json({ error: "Error en dashboard" });
   }
 });
 
-// Obtener lista de alumnos con estado de asistencia hoy
+// ========================
+//  🔵 LISTA DEL DÍA
+// ========================
+// GET: solo devuelve la lista de alumnos con su asistencia de hoy
 app.get('/api/attendance/today', async (req, res) => {
   if (!pool) return res.status(500).json({ error: 'DB no conectada' });
 
@@ -185,56 +239,62 @@ app.get('/api/attendance/today', async (req, res) => {
       SELECT a.id, a.name, l.status
       FROM Alumnos a
       LEFT JOIN Llegadas l 
-        ON a.id = l.alumnoId
+        ON a.id = l.alumnoId AND CAST(l.HoraLlegada AS DATE) = CAST(GETDATE() AS DATE)
       ORDER BY a.name
     `);
 
-    const students = result.recordset.map(r => ({
+    res.json(result.recordset.map(r => ({
       id: r.id,
       name: r.name,
-      status: r.status || "", // 👈 mostrará tal cual lo que hay en Llegadas.status
-    }));
-
-    res.json(students);
+      status: r.status || ""
+    })));
   } catch (error) {
-    console.error('Error al obtener asistencia:', error);
+    console.error(error);
     res.status(500).json({ error: 'Error al obtener asistencia' });
   }
 });
 
-// Guardar o actualizar asistencia
+// POST: guardar o actualizar asistencia
 app.post('/api/attendance/saveManual', async (req, res) => {
   if (!pool) return res.status(500).json({ error: 'DB no conectada' });
 
-  const students = req.body;
+  const students = req.body; // [{ id: 1, status: 'PRESENT' }, ... ]
 
   try {
     for (const s of students) {
-      // Actualiza solo si ya existe el registro en Asistencias
-      const result = await pool.request()
+      // Primero intento actualizar
+      const updateResult = await pool.request()
         .input('alumnoId', sql.Int, s.id)
         .input('status', sql.NVarChar(10), s.status)
         .query(`
-          UPDATE Asistencias
-          SET status = @status, HoraRegistro = GETDATE()
-          WHERE alumnoId = @alumnoId AND CAST(HoraRegistro AS DATE) = CAST(GETDATE() AS DATE);
+          UPDATE Llegadas
+          SET status = @status, HoraLlegada = GETDATE()
+          WHERE alumnoId = @alumnoId AND CAST(HoraLlegada AS DATE) = CAST(GETDATE() AS DATE)
         `);
 
-      // Opcional: si quieres avisar si no existía registro
-      if (result.rowsAffected[0] === 0) {
-        console.log(`No se encontró registro de asistencia para el alumno ${s.id} el día de hoy`);
+      // Si no existía registro, inserto uno nuevo
+      if (updateResult.rowsAffected[0] === 0) {
+        await pool.request()
+          .input('alumnoId', sql.Int, s.id)
+          .input('status', sql.NVarChar(10), s.status)
+          .query(`
+            INSERT INTO Llegadas (alumnoId, status, HoraLlegada)
+            VALUES (@alumnoId, @status, GETDATE())
+          `);
       }
     }
 
-    res.json({ mensaje: 'Asistencia actualizada correctamente' });
+    res.json({ mensaje: 'Asistencia guardada correctamente' });
   } catch (error) {
-    console.error('Error al actualizar asistencia:', error);
-    res.status(500).json({ error: 'Error al actualizar asistencia' });
+    console.error('Error al guardar asistencia:', error);
+    res.status(500).json({ error: 'Error al guardar asistencia' });
   }
 });
 
 
-const PORT = 4000;
-app.listen(PORT, () => {
-  console.log(`Servidor corriendo en http://localhost:${PORT}`);
+// ========================
+// SERVIDOR
+// ========================
+app.listen(4000, () => {
+  console.log("Servidoor corriendo en http://localhost:4000");
 });
