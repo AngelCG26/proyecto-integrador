@@ -5,11 +5,11 @@ import TakeAttendance from './TakeAttendance';
 import Reports from './Reports';
 import Login from './Login';
 
-export default function App() {
+const App: React.FC = () => {
   return (
     <div style={{ padding: 20 }}>
       <nav style={{ marginBottom: 20 }}>
-        <Link to='/'>Dashboard</Link> | <Link to='/take'>Tomar asistencia</Link> | <Link to='/reports'>Reportes</Link>
+        <Link to='/'>Dashboard</Link> | <Link to='/take'>Tomar asistencia</Link> | <Link to='/reports'>Reportes</Link> | <Link to='/login'>Login</Link>
       </nav>
       <Routes>
         <Route path='/' element={<Dashboard />} />
@@ -19,4 +19,6 @@ export default function App() {
       </Routes>
     </div>
   );
-}
+};
+
+export default App;
