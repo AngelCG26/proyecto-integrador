@@ -295,6 +295,6 @@ app.post('/api/attendance/saveManual', async (req, res) => {
 // ========================
 // SERVIDOR
 // ========================
-app.listen(4000, () => {
-  console.log("Servidoor corriendo en http://localhost:4000");
+app.listen(4000, '0.0.0.0', () => {
+  console.log("Servidoor corriendo en http://0.0.0.0:4000");
 });
